@@ -1,0 +1,10 @@
+{
+  "dayId": 4,
+  "durationSec": 100,
+  "customerSpawn": { "intervalMs": 6000, "maxSlots": 3 },
+  "patienceMul": 1.05,
+  "recipePool": ["classic", "chili"],
+  "toppingBar": ["SesameSauce", "SesameOil", "Scallion", "Radish", "ChiliOil", "Garlic"],
+  "initialFilled": 2,
+  "targetSatisfaction": { "star1": 0.45, "star2": 0.65, "star3": 0.85 }
+}
