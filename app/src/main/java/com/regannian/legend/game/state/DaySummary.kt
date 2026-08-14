@@ -10,6 +10,10 @@ data class DaySummary(
     val satPercent: Int,
     val orderCount: Int,
     val stars: Int,
+    val servedUncle: Boolean = false,
+    val chasedThief: Boolean = false,
+    val discarded: Boolean = false,
+    val servedGood: Boolean = false,
 )
 
 fun GameState.toDaySummary(): DaySummary {
@@ -25,6 +29,10 @@ fun GameState.toDaySummary(): DaySummary {
         satPercent = satPercent,
         orderCount = daySatCount,
         stars = starCount(satRatio, targetSatisfaction),
+        servedUncle = dayStats.servedUncle,
+        chasedThief = dayStats.chasedThief,
+        discarded = dayStats.discarded,
+        servedGood = dayStats.servedGood,
     )
 }
 

@@ -57,6 +57,7 @@ data class GameState(
     val thiefCooldownMs: Long = 0L,
     /** D3 辅食工位 */
     val sideStations: Map<SideId, SideStationState> = emptyMap(),
+    val dayStats: DayStats = DayStats(),
 ) {
     fun firstEmptyBowlId(): BowlId? =
         bowls.keys.firstOrNull { bowls[it] is BowlState.Empty }
@@ -179,6 +180,7 @@ data class GameState(
                 thiefCooldownMs = if (config.dayId >= GrayboxConfig.THIEF_MIN_DAY) 20_000L else Long.MAX_VALUE / 4,
                 sideStations = UpgradeEffects.unlockedSides(upgrades)
                     .associateWith { SideStationState.Idle },
+                dayStats = DayStats(),
             )
         }
     }

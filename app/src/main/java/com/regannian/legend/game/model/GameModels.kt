@@ -161,6 +161,8 @@ data class CustomerState(
     val patienceMs: Long,
     val patienceMaxMs: Long,
     val kind: CustomerKind = CustomerKind.Normal,
+    /** 出餐/离店台词；等面台词由 UI 按耐心算。 */
+    val bark: String? = null,
 )
 
 data class CoinPile(

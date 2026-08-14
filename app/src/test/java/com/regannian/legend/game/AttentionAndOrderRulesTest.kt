@@ -32,10 +32,19 @@ class AttentionAndOrderRulesTest {
     }
 
     @Test
+    fun good_hold_keeps_good_quality() {
+        var state = toReadyDust(GameState.initialGraybox())
+        // 出锅后仍在好面宽限内
+        state = tick.advance(state, GrayboxConfig.DUST_GOOD_HOLD_MS - 200L).state
+        val dust = state.stations.getValue(StationId.DustCook) as StationState.Ready
+        assertEquals(ItemQuality.Good, dust.quality)
+    }
+
+    @Test
     fun overcook_dust_becomes_soft() {
         var state = toReadyDust(GameState.initialGraybox())
-        // 越过绿区、未出红区终点 → Soft
-        state = tick.advance(state, 200L).state
+        // 越过好面宽限、未出红区终点 → Soft
+        state = tick.advance(state, GrayboxConfig.DUST_GOOD_HOLD_MS + 200L).state
         val dust = state.stations.getValue(StationId.DustCook) as StationState.Ready
         assertEquals(ItemQuality.Soft, dust.quality)
     }
@@ -43,7 +52,7 @@ class AttentionAndOrderRulesTest {
     @Test
     fun soft_quality_lowers_reward() {
         var state = toReadyDust(GameState.initialGraybox())
-        state = tick.advance(state, 200L).state
+        state = tick.advance(state, GrayboxConfig.DUST_GOOD_HOLD_MS + 200L).state
         state = reduce(state, GameIntent.DragCoolToBlanch())
         state = tick.advance(state, GrayboxConfig.BLANCH_MS).state
         val bowlId = state.firstEmptyBowlId()!!

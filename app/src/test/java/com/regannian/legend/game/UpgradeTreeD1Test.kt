@@ -8,6 +8,7 @@ import com.regannian.legend.game.model.StationId
 import com.regannian.legend.game.model.StationState
 import com.regannian.legend.game.reducer.GameReducer
 import com.regannian.legend.game.state.GameState
+import com.regannian.legend.game.tick.TickEngine
 import com.regannian.legend.game.upgrade.StationTimings
 import com.regannian.legend.game.upgrade.UpgradeCatalog
 import com.regannian.legend.game.upgrade.UpgradeEffects
@@ -84,7 +85,8 @@ class UpgradeTreeD1Test {
         // C1 queue: dust ready + blanch busy
         state = GameState.initialGraybox(upgrades = setOf(UpgradeId.C1))
         state = GameReducer.reduce(state, GameIntent.TapStation(StationId.DustCook)).state
-        state = GameReducer.reduce(state, GameIntent.TapStation(StationId.DustCook)).state
+        state = TickEngine().advance(state, state.timings.dustCookMs).state
+        assertTrue(state.stations[StationId.DustCook] is StationState.Ready)
         val blanchWorking = StationState.Working(
             remainingMs = 500,
             totalMs = 500,

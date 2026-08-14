@@ -8,14 +8,20 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.regannian.legend.data.levels.LevelRepository
 import com.regannian.legend.data.progress.PlayerProgress
+import com.regannian.legend.ui.screen.codex.CodexScreen
 import com.regannian.legend.ui.screen.day.DayScreen
+import com.regannian.legend.ui.screen.ending.EndingScreen
 import com.regannian.legend.ui.screen.menu.MenuScreen
 import com.regannian.legend.ui.screen.result.ResultScreen
+import com.regannian.legend.ui.screen.settings.SettingsScreen
 import com.regannian.legend.ui.screen.upgrade.UpgradeScreen
 
 object Routes {
     const val MENU = "menu"
     const val UPGRADE = "upgrade"
+    const val SETTINGS = "settings"
+    const val CODEX = "codex"
+    const val ENDING = "ending"
     const val DAY = "day/{dayId}"
     const val RESULT = "result/{dayId}/{coins}/{sat}/{orders}/{stars}"
 
@@ -48,7 +54,31 @@ fun ReganmianNavHost() {
                         launchSingleTop = true
                     }
                 },
+                onOpenSettings = {
+                    navController.navigate(Routes.SETTINGS) {
+                        launchSingleTop = true
+                    }
+                },
+                onOpenCodex = {
+                    navController.navigate(Routes.CODEX) {
+                        launchSingleTop = true
+                    }
+                },
+                onOpenEnding = {
+                    navController.navigate(Routes.ENDING) {
+                        launchSingleTop = true
+                    }
+                },
             )
+        }
+        composable(Routes.SETTINGS) {
+            SettingsScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.CODEX) {
+            CodexScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.ENDING) {
+            EndingScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.UPGRADE) {
             UpgradeScreen(
@@ -63,7 +93,7 @@ fun ReganmianNavHost() {
             DayScreen(
                 dayId = dayId,
                 onEndDay = { summary ->
-                    PlayerProgress.addDayEarnings(summary.coins, summary.dayId)
+                    PlayerProgress.recordDay(summary)
                     navController.navigate(
                         Routes.result(
                             dayId = summary.dayId,
@@ -98,6 +128,11 @@ fun ReganmianNavHost() {
                 stars = entry.arguments?.getInt("stars") ?: 0,
                 onOpenUpgrade = {
                     navController.navigate(Routes.UPGRADE) {
+                        launchSingleTop = true
+                    }
+                },
+                onOpenEnding = {
+                    navController.navigate(Routes.ENDING) {
                         launchSingleTop = true
                     }
                 },

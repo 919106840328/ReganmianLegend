@@ -1,5 +1,10 @@
 package com.regannian.legend.ui.component
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -49,15 +54,27 @@ fun HitBlock(
     color: Color,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    glyph: String? = null,
+    pulse: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
+    val infinite = rememberInfiniteTransition(label = "hit-pulse")
+    val pulseScale by infinite.animateFloat(
+        initialValue = 1f,
+        targetValue = if (pulse) 1.05f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(520),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulse-scale",
+    )
     Box(
         modifier = modifier
             .sizeIn(minWidth = 96.dp, minHeight = 72.dp)
             .graphicsLayer {
-                val s = if (pressed && enabled) 0.94f else 1f
+                val s = (if (pressed && enabled) 0.94f else 1f) * pulseScale
                 scaleX = s
                 scaleY = s
             }
@@ -78,13 +95,20 @@ fun HitBlock(
             .padding(10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        HitBlockLabel(title = title, subtitle = subtitle)
+        HitBlockLabel(title = title, subtitle = subtitle, glyph = glyph)
     }
 }
 
 @Composable
-fun HitBlockLabel(title: String, subtitle: String) {
+fun HitBlockLabel(title: String, subtitle: String, glyph: String? = null) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        if (!glyph.isNullOrBlank()) {
+            Text(
+                text = glyph,
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+            )
+        }
         Text(
             text = title,
             style = MaterialTheme.typography.titleSmall,

@@ -23,16 +23,32 @@ class ReganmianApp : Application() {
             val snap = saveRepository.load()
             withContext(Dispatchers.Main) {
                 PlayerProgress.hydrate(snap)
-                GameSettings.setMuted(snap.muted)
+                GameSettings.hydrate(
+                    sfxMuted = snap.muted,
+                    bgmMuted = snap.bgmMuted,
+                    tutorialDone = snap.tutorialDone,
+                )
             }
             PlayerProgress.attachSaver { next ->
                 appScope.launch {
-                    saveRepository.save(next.copy(muted = GameSettings.muted.value))
+                    saveRepository.save(
+                        next.copy(
+                            muted = GameSettings.muted.value,
+                            bgmMuted = GameSettings.bgmMuted.value,
+                            tutorialDone = GameSettings.tutorialDone.value,
+                        ),
+                    )
                 }
             }
             GameSettings.attachListener {
                 appScope.launch {
-                    saveRepository.save(PlayerProgress.snapshot(muted = GameSettings.muted.value))
+                    saveRepository.save(
+                        PlayerProgress.snapshot(
+                            muted = GameSettings.muted.value,
+                            bgmMuted = GameSettings.bgmMuted.value,
+                            tutorialDone = GameSettings.tutorialDone.value,
+                        ),
+                    )
                 }
             }
         }

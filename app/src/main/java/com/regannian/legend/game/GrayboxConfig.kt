@@ -18,12 +18,19 @@ object GrayboxConfig {
     const val DAY_DURATION_MS: Long = 100_000L
     const val TICK_STEP_MS: Long = 100L
 
-    /** 掸面：绿区约 2s；更宽红区，降低过煮压力。 */
+    /**
+     * 掸面时间轴：
+     * - COOK：煮到可出锅（Working→Ready）
+     * - GOOD_HOLD：出锅后仍算「好面」的宽限
+     * - RED / BURNT：软面 / 粘面分界
+     */
     const val DUST_COOK_MS: Long = 2_000L
+    const val DUST_GOOD_HOLD_MS: Long = 1_800L
     const val DUST_RED_MS: Long = 6_000L
     const val DUST_BURNT_MS: Long = 9_000L
 
     const val BLANCH_MS: Long = 600L
+    const val BLANCH_GOOD_HOLD_MS: Long = 1_200L
     const val BLANCH_RED_MS: Long = 2_500L
     const val BLANCH_BURNT_MS: Long = 4_000L
 
@@ -142,6 +149,9 @@ object GrayboxConfig {
         ItemQuality.Burnt -> "糊面"
     }
 
+    /** 好面说明（UI 展示）。 */
+    const val QUALITY_HINT: String = "好面=出锅后在宽限内捞走；黄区变软、红区更差"
+
     fun qualityMultiplier(q: ItemQuality): Float = when (q) {
         ItemQuality.Good -> 1f
         ItemQuality.Soft -> 0.6f
@@ -149,14 +159,29 @@ object GrayboxConfig {
         ItemQuality.Burnt -> 0.3f
     }
 
-    fun qualityFromElapsed(greenEnd: Long, redEnd: Long, burntEnd: Long, elapsed: Long): ItemQuality {
+    /**
+     * @param readyMs Working→Ready 的时刻（满格出锅）
+     * @param goodUntilMs 仍算好面的截止（ready + hold）
+     */
+    fun qualityFromElapsed(
+        readyMs: Long,
+        goodUntilMs: Long,
+        redEnd: Long,
+        burntEnd: Long,
+        elapsed: Long,
+    ): ItemQuality {
+        val goodCap = goodUntilMs.coerceAtLeast(readyMs)
         return when {
-            elapsed <= greenEnd -> ItemQuality.Good
+            elapsed <= goodCap -> ItemQuality.Good
             elapsed <= redEnd -> ItemQuality.Soft
             elapsed <= burntEnd -> ItemQuality.Sticky
             else -> ItemQuality.Burnt
         }
     }
+
+    fun toppingsLine(toppings: Set<IngredientId>): String =
+        if (toppings.isEmpty()) "配料：无"
+        else "配料：" + toppings.joinToString("+") { displayName(it) }
 
     /**
      * 主料（芝麻酱）缺失 → 拒收；

@@ -1,6 +1,7 @@
 package com.regannian.legend.game.reducer
 
 import com.regannian.legend.game.GrayboxConfig
+import com.regannian.legend.game.copy.CustomerLines
 import com.regannian.legend.game.intent.GameIntent
 import com.regannian.legend.game.model.AttentionWindow
 import com.regannian.legend.game.model.BowlId
@@ -149,7 +150,11 @@ object GameReducer {
                     satSum += 0f
                     satCount += 1
                     leftThisTick += 1
-                    customer.copy(status = CustomerStatus.LeftAngry, patienceMs = 0L)
+                    customer.copy(
+                        status = CustomerStatus.LeftAngry,
+                        patienceMs = 0L,
+                        bark = CustomerLines.FED_UP,
+                    )
                 } else {
                     customer.copy(patienceMs = patience)
                 }
@@ -336,6 +341,7 @@ object GameReducer {
                 state.copy(
                     thief = ThiefState.Absent,
                     thiefCooldownMs = GrayboxConfig.THIEF_COOLDOWN_MS,
+                    dayStats = state.dayStats.copy(chasedThief = true),
                 ),
                 listOf(
                     GameEffect.Toast(
@@ -493,14 +499,16 @@ object GameReducer {
         step: Long,
         timings: com.regannian.legend.game.upgrade.StationTimings,
     ): StationState {
-        val (green, red, burnt) = when (id) {
-            StationId.DustCook -> Triple(
+        val (readyMs, goodUntil, red, burnt) = when (id) {
+            StationId.DustCook -> listOf(
                 timings.dustCookMs,
+                timings.dustGoodUntilMs(),
                 timings.dustRedMs,
                 timings.dustBurntMs,
             )
-            StationId.Blanch -> Triple(
+            StationId.Blanch -> listOf(
                 timings.blanchMs,
+                timings.blanchGoodUntilMs(),
                 timings.blanchRedMs,
                 timings.blanchBurntMs,
             )
@@ -509,11 +517,13 @@ object GameReducer {
             is StationState.Idle -> station
             is StationState.Working -> {
                 val elapsed = station.attention.elapsedMs + step
-                val fromElapsed = GrayboxConfig.qualityFromElapsed(green, red, burnt, elapsed)
+                val fromElapsed = GrayboxConfig.qualityFromElapsed(
+                    readyMs, goodUntil, red, burnt, elapsed,
+                )
                 val quality = worseQuality(station.quality, fromElapsed)
                 val attention = station.attention.copy(elapsedMs = elapsed)
                 val remain = station.remainingMs - step
-                if (remain <= 0L || elapsed >= green) {
+                if (remain <= 0L || elapsed >= readyMs) {
                     StationState.Ready(
                         output = station.output,
                         quality = quality,
@@ -529,7 +539,9 @@ object GameReducer {
             }
             is StationState.Ready -> {
                 val elapsed = station.attention.elapsedMs + step
-                val fromElapsed = GrayboxConfig.qualityFromElapsed(green, red, burnt, elapsed)
+                val fromElapsed = GrayboxConfig.qualityFromElapsed(
+                    readyMs, goodUntil, red, burnt, elapsed,
+                )
                 val quality = worseQuality(station.quality, fromElapsed)
                 station.copy(
                     quality = quality,
@@ -568,13 +580,8 @@ object GameReducer {
                 Transition(state.copy(stations = state.stations + (StationId.DustCook to working)))
             }
             is StationState.Working -> {
-                val ready = finishWorkingEarly(
-                    station = station,
-                    greenEnd = t.dustCookMs,
-                    redEnd = t.dustRedMs,
-                    burntEnd = t.dustBurntMs,
-                )
-                Transition(state.copy(stations = state.stations + (StationId.DustCook to ready)))
+                // 煮面中不可点加速/提前出锅，满格后自动 Ready
+                Transition(state, listOf(GameEffect.Toast("还在煮，等进度满格再捞")))
             }
             is StationState.Ready -> {
                 if (state.stations[StationId.Blanch] is StationState.Idle) {
@@ -592,13 +599,7 @@ object GameReducer {
         return when (station) {
             is StationState.Idle -> Transition(state, listOf(GameEffect.Toast("先拖/点凉面过来")))
             is StationState.Working -> {
-                val ready = finishWorkingEarly(
-                    station = station,
-                    greenEnd = t.blanchMs,
-                    redEnd = t.blanchRedMs,
-                    burntEnd = t.blanchBurntMs,
-                )
-                Transition(state.copy(stations = state.stations + (StationId.Blanch to ready)))
+                Transition(state, listOf(GameEffect.Toast("还在烫，等进度满格再停")))
             }
             is StationState.Ready -> {
                 val bowlId = state.focusedBowlId
@@ -608,29 +609,6 @@ object GameReducer {
                 dragHotToBowl(state, bowlId)
             }
         }
-    }
-
-    /** 制作中再点：提前出锅；未到绿区仍算好面。 */
-    private fun finishWorkingEarly(
-        station: StationState.Working,
-        greenEnd: Long,
-        redEnd: Long,
-        burntEnd: Long,
-    ): StationState.Ready {
-        val elapsed = station.attention.elapsedMs
-        val fromElapsed = if (elapsed < greenEnd) {
-            ItemQuality.Good
-        } else {
-            GrayboxConfig.qualityFromElapsed(greenEnd, redEnd, burntEnd, elapsed)
-        }
-        val quality = worseQuality(station.quality, fromElapsed)
-        return StationState.Ready(
-            output = station.output,
-            quality = quality,
-            attention = station.attention.copy(
-                elapsedMs = elapsed.coerceAtLeast(greenEnd),
-            ),
-        )
     }
 
     private fun dragCoolToBlanch(state: GameState): Transition {
@@ -805,13 +783,26 @@ object GameReducer {
 
         when (val verdict = GrayboxConfig.judgeServe(customer.order, toppings, quality)) {
             is ServeVerdict.Reject -> {
-                return Transition(state, listOf(GameEffect.RejectServe))
+                return Transition(
+                    state.copy(
+                        customers = state.customers.map {
+                            if (it.id == customer.id) it.copy(bark = CustomerLines.RESIGNED) else it
+                        },
+                    ),
+                    listOf(GameEffect.RejectServe),
+                )
             }
             is ServeVerdict.Accept -> {
                 val patienceSat = if (customer.patienceMaxMs <= 0L) 1f
                 else customer.patienceMs.toFloat() / customer.patienceMaxMs.toFloat()
                 val sat = (patienceSat * verdict.satFactor).coerceIn(0f, 1f)
                 val reward = UpgradeEffects.scaledReward(verdict.reward, state.ownedUpgrades)
+                val bark = CustomerLines.serveLine(quality == ItemQuality.Good)
+                val stats = if (quality == ItemQuality.Good) {
+                    state.dayStats.copy(servedGood = true)
+                } else {
+                    state.dayStats
+                }
 
                 val nextFocus = when {
                     state.focusedBowlId != bowlId -> state.focusedBowlId
@@ -826,13 +817,14 @@ object GameReducer {
                             focusedBowlId = nextFocus,
                             customers = state.customers.map {
                                 if (it.id == customer.id) {
-                                    it.copy(status = CustomerStatus.WaitingInteract)
+                                    it.copy(status = CustomerStatus.WaitingInteract, bark = bark)
                                 } else {
                                     it
                                 }
                             },
                             daySatSum = state.daySatSum + sat,
                             daySatCount = state.daySatCount + 1,
+                            dayStats = stats,
                         ),
                         listOf(
                             GameEffect.ServedOk,
@@ -849,12 +841,13 @@ object GameReducer {
                         bowls = state.bowls + (bowlId to BowlState.Empty),
                         focusedBowlId = nextFocus,
                         customers = state.customers.map {
-                            if (it.id == customer.id) it.copy(status = CustomerStatus.Served) else it
+                            if (it.id == customer.id) it.copy(status = CustomerStatus.Served, bark = bark) else it
                         },
                         coinsOnCounter = state.coinsOnCounter + pile,
                         nextCoinPileSeq = state.nextCoinPileSeq + 1,
                         daySatSum = state.daySatSum + sat,
                         daySatCount = state.daySatCount + 1,
+                        dayStats = stats,
                     ),
                     listOf(GameEffect.ServedOk, GameEffect.PlaySfx(SfxId.Serve)),
                 )
@@ -900,6 +893,7 @@ object GameReducer {
                             },
                             coinsOnCounter = state.coinsOnCounter + pile,
                             nextCoinPileSeq = state.nextCoinPileSeq + 1,
+                            dayStats = state.dayStats.copy(servedUncle = true),
                         ),
                         listOf(
                             GameEffect.Toast("大爷拍桌付钱 +$tip"),
@@ -942,6 +936,7 @@ object GameReducer {
                 bowls = state.bowls + (bowlId to BowlState.Empty),
                 focusedBowlId = nextFocus,
                 coins = (state.coins - GrayboxConfig.DISCARD_PENALTY).coerceAtLeast(0),
+                dayStats = state.dayStats.copy(discarded = true),
             ),
             listOf(GameEffect.Toast("扔掉，−${GrayboxConfig.DISCARD_PENALTY}金")),
         )
